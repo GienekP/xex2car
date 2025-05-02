@@ -4,8 +4,8 @@
 ; (c)2025 GienekP
 ;
 ;-----------------------------------------------------------------------
-POS		= $2E
 BUF		= $2C
+POS		= $2E
 ;-----------------------------------------------------------------------
 CASINI  = $02
 BOOTQ   = $09
@@ -39,7 +39,7 @@ EDOPN   = $EF94
 		
 		dta $FF
 ;-----------------------------------------------------------------------
-		ORG $BE10
+		ORG $BE00
 		
 STARTLD
 .local SIOINT,RAMPROC
@@ -52,7 +52,12 @@ STARTLD
 		sta RUNAD+1
 ;----------------
 ; START READ NEW DOS BLOCK
-NEWBLK	lda #<RETURN
+NEWBLK	ldx #$03
+@		lda BUF,x
+		sta STORE,x
+		dex
+		bpl @-
+		lda #<RETURN
 		sta INITAD
 		lda #>RETURN
 		sta INITAD+1
@@ -85,6 +90,7 @@ NEWBLK	lda #<RETURN
 		pha
 		lda #<RESETCD-1
 		pha
+		jsr RESTORE
 		jmp (RUNAD)
 ;----------------
 ; READ DATA
@@ -104,7 +110,16 @@ LOADBLK	jsr GETBYTE
 		pha
 		lda #<NEWBLK-1
 		pha
+		jsr RESTORE
 		jmp (INITAD)
+;----------------
+; RESTORE
+RESTORE	ldx #$03
+@		lda STORE,x
+		sta BUF,x
+		dex
+		bpl @-
+		rts
 ;----------------
 ; GET BYTE
 GETBYTE	ldy PTR
@@ -112,7 +127,7 @@ GETBYTE	ldy PTR
 		bne READYB
 		lda #$00
 		sta PTR
-		lda #$78
+		lda #$72
 @		cmp VCOUNT
 		bne @-
 		inc CRITIC
@@ -164,6 +179,7 @@ STOP	dta $FF,$FF
 BANK	dta $00
 SECTOR	dta $00,$A0
 PTR		dta $80
+STORE	dta $00,$00,$00,$00
 ;-----------------------------------------------------------------------
 THEEND	sta $D5FF
 		lda TRIG3
