@@ -5,7 +5,7 @@
 ;
 ;-----------------------------------------------------------------------
 BUF		= $2C
-POS		= $2E
+POS		= BUF+2
 ;-----------------------------------------------------------------------
 CASINI  = $02
 BOOTQ   = $09
@@ -23,7 +23,6 @@ BASICF  = $03F8
 GINTLK  = $03FA
 RAMPROC = $0700
 PORTB   = $D301
-CASBUF	= $0400
 TRIG3   = $D013
 CONSOL  = $D01F
 DMACTL	= $D400
@@ -52,11 +51,7 @@ STARTLD
 		sta RUNAD+1
 ;----------------
 ; START READ NEW DOS BLOCK
-NEWBLK	ldx #$03
-@		lda BUF,x
-		sta STORE,x
-		dex
-		bpl @-
+NEWBLK	jsr SWAP
 		lda #<RETURN
 		sta INITAD
 		lda #>RETURN
@@ -86,11 +81,11 @@ NEWBLK	ldx #$03
 		bpl	@-
 ;----------------
 ; RUNAD
+		jsr SWAP
 		lda #>RESETCD
 		pha
 		lda #<RESETCD-1
 		pha
-		jsr RESTORE
 		jmp (RUNAD)
 ;----------------
 ; READ DATA
@@ -106,17 +101,21 @@ LOADBLK	jsr GETBYTE
 		lda POS+1
 		cmp STOP+1
 		bne LOADBLK
+		jsr SWAP
 		lda #>NEWBLK
 		pha
 		lda #<NEWBLK-1
 		pha
-		jsr RESTORE
 		jmp (INITAD)
 ;----------------
-; RESTORE
-RESTORE	ldx #$03
-@		lda STORE,x
+; SWAP
+SWAP	ldx #$03
+@		lda BUF,x
+		tay
+		lda CP4B,x
 		sta BUF,x
+		tya
+		sta CP4B,x
 		dex
 		bpl @-
 		rts
@@ -139,14 +138,14 @@ GETBYTE	ldy PTR
 		sta BUF+1
 		ldy #$00
 @		lda (BUF),y
-		sta CASBUF,y
+		sta BLKBUF,y
 		iny
 		bpl @-
 		sta $D5FF
 		dec CRITIC
-		lda #<CASBUF
+		lda #<BLKBUF
 		sta BUF
-		lda #>CASBUF
+		lda #>BLKBUF
 		sta BUF+1
 		ldy PTR
 		lda SECTOR
@@ -179,7 +178,10 @@ STOP	dta $FF,$FF
 BANK	dta $00
 SECTOR	dta $00,$A0
 PTR		dta $80
-STORE	dta $00,$00,$00,$00
+;----------------
+CP4B	:4 dta $00
+;----------------
+BLKBUF
 ;-----------------------------------------------------------------------
 THEEND	sta $D5FF
 		lda TRIG3
@@ -197,9 +199,9 @@ NEWPAG	lda #$00
 		lda POS+1
 		cmp #$C0
 		bne NEWPAG
-		lda #<THEEND
+		lda #<(THEEND+128)
 		sta MEMLO
-		lda #>THEEND
+		lda #>(THEEND+128)
 		sta MEMLO+1
 		lda #$22
 		sta DMACTLS
@@ -213,8 +215,12 @@ NEWPAG	lda #$00
 		sta COLDST
 		lda #$10
 @		cmp VCOUNT
-		bne @-		
-		rts
+		bne @-
+		lda #<BLKBUF
+		sta BUF
+		lda #>BLKBUF
+		sta BUF+1
+		jmp SWAP
 ;-----------------------------------------------------------------------
 .end
 ENDLD
@@ -272,11 +278,6 @@ LOOP	lda (POS),y
 		lda #$10
 @		cmp VCOUNT
 		bne @-
-		lda #<CASBUF
-		sta BUF
-		lda #>CASBUF
-		sta BUF+1
-		clc
 		jmp RAMPROC
 ;-----------------------------------------------------------------------		
 ; INITCART ROUTINE
